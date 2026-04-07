@@ -57,28 +57,39 @@ public class ItemTooltipHandler {
         if (!SneakyCurses.CONFIG.getHolder(ServerConfig.class).isAvailable() ||
                 !SneakyCurses.CONFIG.get(ServerConfig.class).obfuscateCurses) return;
         if (!isAffected(player, itemStack)) return;
+        
+        Map<String, Holder<Enchantment>> curseNameMap = new java.util.HashMap<>();
+    
+        for (var entry : itemStack.getEnchantments().entrySet()) {
+            Holder<Enchantment> enchantment = entry.getKey();
+            int level = entry.getIntValue();
+    
+            if (enchantment.is(EnchantmentTags.CURSE)) {
+                String name = Enchantment.getFullname(enchantment, level).getString();
+                curseNameMap.put(name, enchantment);
+            }
+        }
+    
+        if (curseNameMap.isEmpty()) return;
+    
         ListIterator<Component> iterator = lines.listIterator();
         while (iterator.hasNext()) {
-            if (iterator.next().getContents() instanceof TranslatableContents contents &&
-                    contents.getKey().startsWith("enchantment.")) {
-                String[] enchantmentKey = contents.getKey().split("\\.");
-                Holder<Enchantment> enchantment = null;
-                if (enchantmentKey.length >= 3) {
-                    HolderLookup.RegistryLookup<Enchantment> enchantments = tooltipContext.registries()
-                            .lookupOrThrow(Registries.ENCHANTMENT);
-                    ResourceLocation resourceLocation = ResourceLocationHelper.fromNamespaceAndPath(enchantmentKey[1], enchantmentKey[2]);
-                    enchantment = enchantments.get(ResourceKey.create(Registries.ENCHANTMENT, resourceLocation)).orElse(null);
-                }
-                if (enchantment != null && enchantment.is(EnchantmentTags.CURSE)) {
-                    if (enchantmentKey.length == 3) {
-                        int enchantmentId = ENCHANTMENT_IDS.computeIfAbsent(enchantment.value(), $ -> RANDOM.nextInt());
-                        initSeed(currentScreenSeed + enchantmentId);
-                        Component component = getLoreForWidth(Minecraft.getInstance().font);
-                        iterator.set(Component.empty().append(component).withStyle(ChatFormatting.RED));
-                    } else {
-                        // remove descriptions from the enchantment descriptions mod, this matches their format
-                        iterator.remove();
-                    }
+            Component line = iterator.next();
+            String text = line.getString();
+            
+            Holder<Enchantment> enchantment = curseNameMap.get(text);
+            if (enchantment != null) {
+                int enchantmentId = ENCHANTMENT_IDS.computeIfAbsent(enchantment.value(), $ -> RANDOM.nextInt());
+                initSeed(currentScreenSeed + enchantmentId);
+    
+                Component component = getLoreForWidth(Minecraft.getInstance().font);
+                iterator.set(Component.empty().append(component).withStyle(ChatFormatting.RED));
+                continue;
+            }
+            else if (line.getContents() instanceof TranslatableContents contents) {
+                String key = contents.getKey();
+                if (key.startsWith("enchantment.") && key.endsWith(".desc")) {
+                    iterator.remove();
                 }
             }
         }
